@@ -1,0 +1,195 @@
+/* Reset and base styles */
+body, html {
+    background: #000;
+    color: #fff;
+    min-height: 100vh;
+    margin: 0;
+    font-family: 'Poppins', Arial, sans-serif;
+  }
+  
+  /* Root container */
+  .landing-root {
+    min-height: 100vh;
+    background: #000;
+    color: #fff;
+  }
+  
+  /* Header styles */
+  .landing-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 48px;
+    padding-bottom: 32px;
+  }
+  
+  /* Logo and title */
+  .logo-area {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 10px;
+  }
+  
+  .logo-img {
+    width: 120px;
+    height: auto;
+    object-fit: contain;
+  }
+  
+  .logo-title {
+    font-size: 4.2rem;
+    font-weight: 900;
+    letter-spacing: 0.09em;
+  }
+  
+  /* Subtitle */
+  .landing-subtitle {
+    font-size: 1.8rem;
+    color: #ccc;
+    margin-top: 18px;
+    margin-bottom: 30px;
+    text-align: center;
+  }
+  
+  /* Button row */
+  .landing-btn-row {
+    display: flex;
+    gap: 48px;
+    margin-bottom: 54px;
+  }
+  
+  /* Buttons */
+  .landing-btn {
+    padding: 10px 34px;
+    font-size: 1.15rem;
+    font-weight: 700;
+    border-radius: 7px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    margin-right: 8px;
+  }
+  
+  .landing-btn:last-child {
+    margin-right: 0;
+  }
+  
+  .landing-btn.primary {
+    background: #fff;
+    color: #000;
+  }
+  
+  .landing-btn.primary:hover {
+    background: #48494a;
+    color: #fff;
+  }
+  
+  .landing-btn.secondary {
+    background: #000000;
+    color: #fff;
+    border: 1px solid #fff;
+  }
+  
+  .landing-btn.secondary:hover {
+    background: #444;
+  }
+  
+  /* Main content */
+  .landing-main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 8px 36px 8px; /* Reduced side padding as per your request */
+  }
+  
+  /* About section */
+  .about-section {
+    margin-bottom: 54px;
+  }
+  
+  .about-section h2,
+  .howto-section h2 {
+    font-size: 2.8rem;
+    font-weight: 800;
+    margin-bottom: 34px;
+    margin-top: 0;
+  }
+  
+  .about-section p {
+    font-size: 1.16rem;
+    line-height: 1.7;
+    color: #eee;
+    margin-top: 0;
+    margin-bottom: 18px;
+  }
+  
+  /* How-to section */
+  .howto-section {
+    margin-bottom: 36px;
+    color: #aaa;
+  }
+  
+  .howto-section h2 {
+    margin-bottom: 20px;
+    color: #fff;
+  }
+  
+  .howto-section ol {
+    padding-left: 1.2em;
+    font-size: 1.11rem;
+    line-height: 1.7;
+    margin-bottom: 0;
+  }
+  
+  .howto-section li {
+    margin-bottom: 16px;
+  }
+  
+  .howto-section code {
+    background: #222;
+    color: #2D9CDB;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.97em;
+  }
+  
+  .howto-section a {
+    color: #fff !important;
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+    font-weight: 500;
+  }
+  
+  .howto-section .howto-highlight {
+    color: #fff;
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+    font-weight: 700;
+    margin-right: 0.2em;
+    display: inline;
+  }
+  
+  .about-text p {
+    color: #aaa;
+  }
+  
+  /* Responsive adjustments */
+  @media (max-width: 700px) {
+    .landing-main {
+      padding: 0 3vw 24px 3vw;
+    }
+    .logo-title {
+      font-size: 2rem;
+    }
+    .logo-img {
+      width: 60px;
+      height: 60px;
+    }
+    .about-section h2,
+    .howto-section h2 {
+      font-size: 1.18rem;
+    }
+  }
+  
