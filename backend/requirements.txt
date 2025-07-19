@@ -1,9 +1,11 @@
 Flask
 flask-cors
 pandas
-smtplib3
-email-validator
 gunicorn
 openpyxl
 numpy
 PyDrive
+google-api-python-client
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
