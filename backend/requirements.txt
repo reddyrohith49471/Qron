@@ -1,8 +1,9 @@
 Flask
 flask-cors
-numpy
 pandas
-matplotlib
-seaborn
-scikit-learn
+smtplib3
+email-validator
 gunicorn
+openpyxl
+numpy
+PyDrive
