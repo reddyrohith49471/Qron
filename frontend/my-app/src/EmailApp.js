@@ -58,7 +58,7 @@ function EmailApp() {
     formData.append('your_password', yourPassword);
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/send_emails', {
+      const response = await fetch('https://qron.onrender.com/send_emails', {
         method: 'POST',
         body: formData,
       });
