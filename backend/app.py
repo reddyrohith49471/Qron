@@ -1,15 +1,16 @@
+# app.py
 from flask import Flask, request, jsonify
 import pandas as pd
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from email.mime.application import MIMEApplication
 import os
 from flask_cors import CORS
 import traceback
 import zipfile
 from io import BytesIO
 import threading
+from drive_utils import upload_to_drive
 
 app = Flask(__name__)
 CORS(app)
@@ -19,7 +20,8 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 MAX_DATA_FILE_SIZE_MB = 5
 MAX_ATTACHMENT_SIZE_MB = 5
-CHUNK_SIZE = 100
+GOOGLE_DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "your-folder-id-here")
+GOOGLE_DRIVE_CREDENTIALS = os.getenv("GOOGLE_DRIVE_CREDENTIALS", "credentials.json")
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ['csv', 'xls', 'xlsx']
@@ -32,9 +34,11 @@ def compress_attachments(attachments):
             if len(content) > MAX_ATTACHMENT_SIZE_MB * 1024 * 1024:
                 return None, f"{attach_file.filename} exceeds {MAX_ATTACHMENT_SIZE_MB}MB limit."
             zipf.writestr(attach_file.filename, content)
-            attach_file.seek(0)  # Reset pointer for re-use
+            attach_file.seek(0)
     buffer.seek(0)
-    return buffer, None
+    drive_link = upload_to_drive(buffer, "attachments.zip", GOOGLE_DRIVE_FOLDER_ID, GOOGLE_DRIVE_CREDENTIALS)
+    buffer.seek(0)
+    return buffer, drive_link
 
 def process_and_send_emails(params):
     filepath, attachments, form = params
@@ -57,17 +61,17 @@ def process_and_send_emails(params):
         server.starttls()
         server.login(form['your_email'], form['your_password'])
 
-        zip_buffer, error = compress_attachments(attachments)
-        if error:
-            raise ValueError(error)
+        zip_buffer, drive_link = compress_attachments(attachments)
+        if isinstance(drive_link, str) and drive_link.startswith("Google Drive upload failed"):
+            raise ValueError(drive_link)
 
         emails_sent_count = 0
         for _, row in df.iterrows():
             variables = {col: str(row[col]) if pd.notna(row[col]) else '' for col in df.columns}
-
             try:
                 subject = form['subject'].format(**variables)
                 body = form['body'].format(**variables)
+                body += f"\n\nDownload attachments from Google Drive: {drive_link}"
             except KeyError as e:
                 raise ValueError(f"Template variable missing: {e}")
 
@@ -76,11 +80,6 @@ def process_and_send_emails(params):
             msg['To'] = row[email_column]
             msg['Subject'] = subject
             msg.attach(MIMEText(body, 'plain'))
-
-            part = MIMEApplication(zip_buffer.read(), Name="attachments.zip")
-            part['Content-Disposition'] = 'attachment; filename="attachments.zip"'
-            msg.attach(part)
-            zip_buffer.seek(0)
 
             try:
                 server.sendmail(form['your_email'], row[email_column], msg.as_string())
