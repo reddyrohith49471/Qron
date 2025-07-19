@@ -7,6 +7,8 @@ from email.mime.application import MIMEApplication
 import os
 from flask_cors import CORS
 import traceback
+import zipfile
+from io import BytesIO
 import threading
 
 app = Flask(__name__)
@@ -15,139 +17,124 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'your_secret_key_here')
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+MAX_DATA_FILE_SIZE_MB = 5
+MAX_ATTACHMENT_SIZE_MB = 5
+CHUNK_SIZE = 100
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ['csv', 'xls', 'xlsx']
 
+def compress_attachments(attachments):
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for attach_file in attachments:
+            content = attach_file.read()
+            if len(content) > MAX_ATTACHMENT_SIZE_MB * 1024 * 1024:
+                return None, f"{attach_file.filename} exceeds {MAX_ATTACHMENT_SIZE_MB}MB limit."
+            zipf.writestr(attach_file.filename, content)
+            attach_file.seek(0)  # Reset pointer for re-use
+    buffer.seek(0)
+    return buffer, None
 
-@app.route('/send_emails', methods=['POST'])
-def send_emails():
-    if 'data_file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
+def process_and_send_emails(params):
+    filepath, attachments, form = params
 
-    file = request.files['data_file']
-    attachments = request.files.getlist('attachments')
-
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-
-    if not allowed_file(file.filename):
-        return jsonify({'error': 'Please upload a valid CSV or Excel file.'}), 400
-
-    email_column = request.form['email_column'].strip().lower()
-    company_column = request.form.get('company_column', '').strip().lower()
-    hr_column = request.form.get('hr_column', '').strip().lower()
-    custom_columns_raw = request.form.get('custom_columns', '').strip()
-    subject_template = request.form['subject']
-    body_template = request.form['body']
-    your_email = request.form['your_email']
-    your_password = request.form['your_password']
-
-    custom_columns = [col.strip().lower() for col in custom_columns_raw.split(',') if col.strip()] if custom_columns_raw else []
-
-    filepath = os.path.join(UPLOAD_FOLDER, file.filename)
-    file.save(filepath)
-
-    attachment_paths = []
-    for attach_file in attachments:
-        if attach_file and attach_file.filename:
-            attach_path = os.path.join(UPLOAD_FOLDER, attach_file.filename)
-            attach_file.save(attach_path)
-            attachment_paths.append(attach_path)
-
-    # ✅ Launch background thread
-    threading.Thread(target=process_email_sending, args=(
-        filepath, attachment_paths, email_column, company_column, hr_column,
-        custom_columns, subject_template, body_template, your_email, your_password
-    )).start()
-
-    return jsonify({'message': 'Emails are being sent in the background! You can continue using the app.'}), 200
-
-
-def process_email_sending(
-    filepath, attachment_paths, email_column, company_column, hr_column,
-    custom_columns, subject_template, body_template, your_email, your_password
-):
     try:
         ext = filepath.rsplit('.', 1)[1].lower()
         df = pd.read_csv(filepath) if ext == 'csv' else pd.read_excel(filepath)
         df.columns = [col.lower().strip() for col in df.columns]
 
-        required_columns = [email_column]
-        for col in [company_column, hr_column] + custom_columns:
-            if col:
-                required_columns.append(col)
-        missing = [col for col in required_columns if col and col not in df.columns]
+        email_column = form['email_column']
+        required_columns = [email_column] + [c for c in [form['company_column'], form['hr_column']] + form['custom_columns'] if c]
+        missing = [col for col in required_columns if col not in df.columns]
+
         if missing:
-            print(f"[ERROR] Missing columns: {', '.join(missing)}")
-            return
+            raise ValueError(f"Missing columns: {', '.join(missing)}")
 
         df = df.dropna(subset=[email_column])
 
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
-        server.login(your_email, your_password)
+        server.login(form['your_email'], form['your_password'])
+
+        zip_buffer, error = compress_attachments(attachments)
+        if error:
+            raise ValueError(error)
 
         emails_sent_count = 0
         for _, row in df.iterrows():
-            email = row[email_column]
-            if not email:
-                continue
-
-            variables = {}
-            if company_column in df.columns:
-                variables['company'] = str(row[company_column]) if pd.notna(row[company_column]) else ''
-            if hr_column in df.columns:
-                variables['hr_name'] = str(row[hr_column]) if pd.notna(row[hr_column]) else ''
-            for col in custom_columns:
-                if col in df.columns:
-                    variables[col] = str(row[col]) if pd.notna(row[col]) else ''
-
-            # Add all columns
-            for col in df.columns:
-                variables[col] = str(row[col]) if pd.notna(row[col]) else ''
+            variables = {col: str(row[col]) if pd.notna(row[col]) else '' for col in df.columns}
 
             try:
-                subject = subject_template.format(**variables)
-                body = body_template.format(**variables)
+                subject = form['subject'].format(**variables)
+                body = form['body'].format(**variables)
             except KeyError as e:
-                print(f"[ERROR] Template key error: {e}")
-                continue
+                raise ValueError(f"Template variable missing: {e}")
 
             msg = MIMEMultipart()
-            msg['From'] = your_email
-            msg['To'] = email
+            msg['From'] = form['your_email']
+            msg['To'] = row[email_column]
             msg['Subject'] = subject
             msg.attach(MIMEText(body, 'plain'))
 
-            for path in attachment_paths:
-                try:
-                    with open(path, 'rb') as f:
-                        part = MIMEApplication(f.read(), Name=os.path.basename(path))
-                        part['Content-Disposition'] = f'attachment; filename="{os.path.basename(path)}"'
-                        msg.attach(part)
-                except Exception as e:
-                    print(f"[ERROR] Failed to attach file: {path}, Error: {e}")
-                    continue
+            part = MIMEApplication(zip_buffer.read(), Name="attachments.zip")
+            part['Content-Disposition'] = 'attachment; filename="attachments.zip"'
+            msg.attach(part)
+            zip_buffer.seek(0)
 
             try:
-                server.sendmail(your_email, email, msg.as_string())
+                server.sendmail(form['your_email'], row[email_column], msg.as_string())
                 emails_sent_count += 1
-            except Exception as e:
-                print(f"[ERROR] Failed to send email to {email}, Error: {e}")
+            except Exception:
                 continue
 
         server.quit()
-        print(f"[SUCCESS] Emails sent: {emails_sent_count}")
+        os.remove(filepath)
+        return f"Emails sent successfully to {emails_sent_count} recipients!"
 
     except Exception as e:
-        print("[UNEXPECTED ERROR]", traceback.format_exc())
-    finally:
-        # Clean up uploaded files
-        for path in [filepath] + attachment_paths:
-            if os.path.exists(path):
-                os.remove(path)
+        traceback.print_exc()
+        return f"Error: {e}"
 
+@app.route('/send_emails', methods=['POST'])
+def send_emails():
+    try:
+        if 'data_file' not in request.files:
+            return jsonify({'error': 'No data file provided'}), 400
+
+        data_file = request.files['data_file']
+        attachments = request.files.getlist('attachments')
+
+        if not allowed_file(data_file.filename):
+            return jsonify({'error': 'Invalid file format'}), 400
+
+        data_file.seek(0, os.SEEK_END)
+        if data_file.tell() > MAX_DATA_FILE_SIZE_MB * 1024 * 1024:
+            return jsonify({'error': 'Data file too large'}), 400
+        data_file.seek(0)
+
+        filepath = os.path.join(UPLOAD_FOLDER, data_file.filename)
+        data_file.save(filepath)
+
+        form = {
+            'email_column': request.form['email_column'].strip().lower(),
+            'company_column': request.form.get('company_column', '').strip().lower(),
+            'hr_column': request.form.get('hr_column', '').strip().lower(),
+            'custom_columns': [c.strip().lower() for c in request.form.get('custom_columns', '').split(',') if c],
+            'subject': request.form['subject'],
+            'body': request.form['body'],
+            'your_email': request.form['your_email'],
+            'your_password': request.form['your_password']
+        }
+
+        thread = threading.Thread(target=process_and_send_emails, args=((filepath, attachments, form),))
+        thread.start()
+
+        return jsonify({'message': 'Emails are being processed in the background.'}), 200
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'Unexpected error: {e}'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
