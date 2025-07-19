@@ -1,12 +1,20 @@
+# Core packages
 Flask
 flask-cors
-pandas
 gunicorn
-openpyxl
+
+# Data processing
+pandas
 numpy
+openpyxl
+
+# Google Drive and API Auth
 PyDrive
 google-api-python-client
 google-auth
 google-auth-oauthlib
 google-auth-httplib2
-drive_utils
+
+# Build tools to prevent setuptools.build_meta error
+setuptools>=42
+wheel
