@@ -16,6 +16,8 @@ function EmailApp() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const API_URL = process.env.REACT_APP_API_URL;
+
   const handleDataFileChange = (e) => {
     if (e.target.files.length > 0) {
       setDataFile(e.target.files[0]);
@@ -58,7 +60,7 @@ function EmailApp() {
     formData.append('your_password', yourPassword);
 
     try {
-      const response = await fetch('https://qron.onrender.com/send_emails', {
+      const response = await fetch(`${API_URL}/send_emails`, {
         method: 'POST',
         body: formData,
       });
