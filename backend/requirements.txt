@@ -1,7 +1,8 @@
 Flask
+flask-cors
 numpy
 pandas
 matplotlib
 seaborn
-gunicorn
 scikit-learn
+gunicorn
